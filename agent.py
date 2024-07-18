@@ -11,13 +11,13 @@ BATCH_SIZE = 1000
 LR = 0.001
 
 class Agent:
-    def __init__(self, training) -> None:
+    def __init__(self, training, keep_training) -> None:
         self.n_games = 0
         self.epsilon = 0
         self.gamma = 0.9
         self.memory = deque(maxlen=MAX_MEMORY)
         self.model = Linear_QNet(11, 256, 3)
-        if not training:
+        if not training or keep_training:
             self.model.load()
             # for name, param in self.model.named_parameters():
             #         print(f'Parameter name: {name}')
@@ -105,12 +105,12 @@ class Agent:
         
         return final_move
 
-def train(training=True):
+def train(training=True, keep_training=False):
     plot_scores = []
     plot_mean_scores = []
     total_score = 0
     record_score = 0
-    agent = Agent(training=training)
+    agent = Agent(training=training, keep_training=keep_training)
     game = SnakeGameAI()
     while True:
         # get old state
@@ -131,7 +131,7 @@ def train(training=True):
         agent.remember(state_old, final_move, reward, state_new, done)
         
         if done:
-            if not training:
+            if (not training) and (not keep_training):
                 game.reset()
                 continue
             # train long memory
@@ -139,7 +139,7 @@ def train(training=True):
             agent.n_games += 1
             agent.train_long_memory()
             
-            if score > record_score:
+            if score > record_score and training == True:
                 record_score = score
                 agent.model.save()
                 # for name, param in agent.model.named_parameters():
@@ -148,13 +148,13 @@ def train(training=True):
                 #     print(param)
                 #     print('---')
             
-            print(f'Game {agent.n_games}, Score: {score}, Record: {record_score}')
+            mean_score = total_score / agent.n_games
+            print(f'Game {agent.n_games}, Score: {score}, Record: {record_score}, Mean: {mean_score}')
             plot_scores.append(score)
             total_score += score
-            mean_score = total_score / agent.n_games
             plot_mean_scores.append(mean_score)
             plot(plot_scores, plot_mean_scores)
 
 if __name__ == '__main__':
-    train(training=True)
+    train(training=False, keep_training=False)
 
