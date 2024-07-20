@@ -5,8 +5,9 @@ from collections import deque
 from game import SnakeGameAI, Direction, Point, BLOCK_SIZE, BOARDGRIDS
 from model import Linear_QNet, QTrainer
 from helper import plot
+import torch.nn.functional as F
 
-MAX_MEMORY = 100_000
+MAX_MEMORY = 100000
 BATCH_SIZE = 1000
 LR = 0.001
 
@@ -16,7 +17,8 @@ class Agent:
         self.epsilon = 0
         self.gamma = 0.9
         self.memory = deque(maxlen=MAX_MEMORY)
-        self.model = Linear_QNet(11, 256, 3)
+        # print(BOARDGRIDS*3)
+        self.model = Linear_QNet(BOARDGRIDS*3 + 11, BOARDGRIDS*3 + 11, 3)
         if not training or keep_training:
             self.model.load()
             # for name, param in self.model.named_parameters():
@@ -29,6 +31,7 @@ class Agent:
         
     
     def get_state(self, game) -> np.ndarray:
+        # print(f'game.get_snake_board() shape: {game.get_snake_board().shape}')
         head = game.snake[0]
         point_l = Point(head.x - BLOCK_SIZE, head.y)
         point_r = Point(head.x + BLOCK_SIZE, head.y)
@@ -72,7 +75,16 @@ class Agent:
             game.food.y > game.head.y  # food down
         ]
 
-        return np.array(state, dtype=int)
+        snake_board = np.array(game.get_snake_board(), dtype=int)
+        # snake_board_tensor = pt.tensor(snake_board, dtype = pt.float32).permute(2, 0, 1).unsqueeze(0)
+        # pooled_tensor = F.max_pool2d(snake_board_tensor, kernel_size=2, stride=2)
+        # snake_board = pooled_tensor.squeeze(0).permute(1, 2, 0).numpy().flatten()
+        state_array = np.array(state, dtype=int) * 2550
+
+        # Flatten the snake board and concatenate with the state
+        combined_state = np.concatenate((snake_board.flatten(), state_array))
+        # print(f'combined_state: {combined_state}')
+        return combined_state
 
     def remember(self, state, action, reward, next_state, done) -> None:
         self.memory.append((state, action, reward, next_state, done))   
@@ -81,9 +93,10 @@ class Agent:
     def train_long_memory(self) -> None:
         # random sampling from memory to break unrelated correlations observed by the model
         if len(self.memory) > BATCH_SIZE:
-            # print("Training long memory")
+            print("Training long memory")
             mini_sample = random.sample(self.memory, BATCH_SIZE)
         else:
+            print(len(self.memory), BATCH_SIZE)
             mini_sample = self.memory
         
         states, actions, rewards, next_states, dones = zip(*mini_sample)
@@ -94,9 +107,9 @@ class Agent:
 
     def get_action(self, state) -> int:
         # random moves: tradeoff exploration / exploitation
-        self.epsilon = 80 - self.n_games
+        self.epsilon = 200 - self.n_games
         final_move = [0, 0, 0]
-        if random.randint(0, 200) < self.epsilon:
+        if random.randint(0, 300) < self.epsilon:
             move = random.randint(0, 2)
             final_move[move] = 1
         else:
@@ -112,6 +125,7 @@ def train(training=True, keep_training=False):
     plot_mean_scores = []
     total_score = 0
     record_score = 0
+    
     agent = Agent(training=training, keep_training=keep_training)
     game = SnakeGameAI()
     while True:
@@ -123,6 +137,7 @@ def train(training=True, keep_training=False):
         
         # perform move and get new state
         reward, done, score = game.play_step(final_move)
+        
         state_new = agent.get_state(game)
         
         # train short memory
@@ -151,11 +166,11 @@ def train(training=True, keep_training=False):
                 #     print('---')
             
             mean_score = total_score / agent.n_games
-            print(f'Game {agent.n_games}, Score: {score}, Record: {record_score}, Mean: {mean_score}')
-            plot_scores.append(score)
-            total_score += score
-            plot_mean_scores.append(mean_score)
-            plot(plot_scores, plot_mean_scores)
+            print(f'Game {agent.n_games}, Score: {score}, Reward:{reward}, Record: {record_score}, Mean: {mean_score}')
+            # plot_scores.append(score)
+            # total_score += score
+            # plot_mean_scores.append(mean_score)
+            # plot(plot_scores, plot_mean_scores)
 
 if __name__ == '__main__':
     train(training=True, keep_training=False)

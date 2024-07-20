@@ -9,11 +9,13 @@ class Linear_QNet(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
         self.linear1 = nn.Linear(input_size, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, output_size)
+        self.linear2 = nn.Linear(hidden_size, int(hidden_size/2))
+        self.linear3 = nn.Linear(int(hidden_size/2), output_size)
         
     def forward(self, x):
         x = F.relu(self.linear1(x))
-        x = self.linear2(x)
+        x = F.relu(self.linear2(x))
+        x = self.linear3(x)
         return x
     
     def save(self, file_name='model.pth'):
@@ -43,6 +45,7 @@ class QTrainer:
         game_over = pt.tensor(np.array(game_over), dtype=pt.float)
 
         if len(state.shape) == 1:
+            # ex: if shape is [5], then we want it to become [5,1]
             state = pt.unsqueeze(state, 0)
             next_state = pt.unsqueeze(next_state, 0)
             action = pt.unsqueeze(action, 0)
@@ -51,9 +54,13 @@ class QTrainer:
         
         # 1. predicted Q values with current state
         pred = self.model(state)
-
+        # print(pred.shape)
+        # print(reward.shape)
+        # print("========")
         target = pred.clone()
+        
         for idx in range(len(game_over)):
+            # print("game_over", game_over)
             Qnew = reward[idx]
             if not game_over[idx]:
                 Qnew = reward[idx] + self.gamma * pt.max(self.model(next_state[idx]))
@@ -62,6 +69,7 @@ class QTrainer:
 
         # 2. Q_new = R + y * max(next_predicted Q value) => only do this if not done
         # pred.clone()
+        # print("done")
         self.optimizer.zero_grad()
         loss = self.criterion(target, pred)
         loss.backward()
