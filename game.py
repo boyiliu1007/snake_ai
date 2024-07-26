@@ -43,13 +43,14 @@ class SnakeGameAI:
         self.display = pygame.display.set_mode((self.w, self.h))
         pygame.display.set_caption('Snake')
         self.clock = pygame.time.Clock()
-        self.snakeBoard = np.zeros((BOARDHEIGHT//BLOCK_SIZE, BOARDWIDTH//BLOCK_SIZE, 3))
+        self.snakeBoard = np.zeros((BOARDHEIGHT//BLOCK_SIZE, BOARDWIDTH//BLOCK_SIZE))
         self.reset()
         
         
     def reset(self):
         # init game state
         self.direction = Direction.RIGHT
+        self.prev_direction = Direction.RIGHT
         self.head = Point(self.w/2, self.h/2)
         self.prev_head = self.head
         self.snake = [self.head, 
@@ -64,17 +65,19 @@ class SnakeGameAI:
         # print(self.snakeBoard.shape, self.snakeBoard)
         for i in range(len(self.snake)):
             if i == 0:
-                self.snakeBoard[int(self.snake[i].y//BLOCK_SIZE)][int(self.snake[i].x//BLOCK_SIZE)] = list(GREEN)
+                # set head to be 512
+                self.snakeBoard[int(self.snake[i].y//BLOCK_SIZE)][int(self.snake[i].x//BLOCK_SIZE)] = 512
             else:
-                self.snakeBoard[int(self.snake[i].y//BLOCK_SIZE)][int(self.snake[i].x//BLOCK_SIZE)] = BLUE
+                # set body to be 256 - i
+                self.snakeBoard[int(self.snake[i].y//BLOCK_SIZE)][int(self.snake[i].x//BLOCK_SIZE)] = 256 - i
 
     def _place_food(self):
         x = random.randint(0, (self.w-BLOCK_SIZE )//BLOCK_SIZE )*BLOCK_SIZE 
         y = random.randint(0, (self.h-BLOCK_SIZE )//BLOCK_SIZE )*BLOCK_SIZE
         self.food = Point(x, y)
-        self.snakeBoard[int(y//BLOCK_SIZE)][int(x//BLOCK_SIZE)] = RED
+        self.snakeBoard[int(y//BLOCK_SIZE)][int(x//BLOCK_SIZE)] = 1024
         if self.food in self.snake:
-            self.snakeBoard[int(y//BLOCK_SIZE)][int(x//BLOCK_SIZE)] = np.zeros(3)
+            self.snakeBoard[int(y//BLOCK_SIZE)][int(x//BLOCK_SIZE)] = 0
             self._place_food()
         
     def play_step(self, action):
@@ -87,37 +90,41 @@ class SnakeGameAI:
             
         
         # 2. move
+        reward = 0
         self._move(action) # update the head
+        if(self.prev_direction != self.direction and len(self.snake) < 5):
+            self.prev_direction = self.direction
+            reward -= 2
+
         self.snake.insert(0, self.head)
         
         # 3. check if game over
-        reward = 0
         game_over = False
         if self.is_collision():
             game_over = True
-            reward = -210 / len(self.snake)
+            reward -= 210 / len(self.snake)
             return reward, game_over, self.score
         
         # if snake loops for too long, give penalty
         if self.frame_iteration > 100*len(self.snake) and game_over == False:
             game_over = True
-            reward = -210 / len(self.snake)
+            reward -= 210 / len(self.snake)
             return reward, game_over, self.score
             
         # 4. place new food or just move
         if self.head == self.food:
             # eat the food
-            reward = (len(self.snake)) * 30
+            reward += (len(self.snake)) * 100
             self.score += 1
             self._place_food()
             self.hasnt_eat = 0
         else:
             if self.hasnt_eat > self.h * self.w / (BLOCK_SIZE**2):
-                reward += -1/len(self.snake)
+                reward += -30/len(self.snake)
             if np.linalg.norm(np.array(self.head) - np.array(self.food)) < np.linalg.norm(np.array(self.prev_head) - np.array(self.food)):
-                reward += 50/len(self.snake)
+                reward += 30/len(self.snake)
             else:
-                reward += -50/len(self.snake)
+                reward += -30/len(self.snake)
             self.snake.pop()
             self.hasnt_eat += 1
         
@@ -144,19 +151,22 @@ class SnakeGameAI:
         
         currBlue = BLUE.copy()
         drawHeadfFlag = True
-        self.snakeBoard = np.zeros((BOARDHEIGHT//BLOCK_SIZE, BOARDWIDTH//BLOCK_SIZE, 3))
+        self.snakeBoard = np.zeros((BOARDHEIGHT//BLOCK_SIZE, BOARDWIDTH//BLOCK_SIZE))
+        i = 0
         for pt in self.snake:
             if drawHeadfFlag:
-                self.snakeBoard[int(pt.y//BLOCK_SIZE)][int(pt.x//BLOCK_SIZE)] = list(GREEN)
+                self.snakeBoard[int(pt.y//BLOCK_SIZE)][int(pt.x//BLOCK_SIZE)] = 512
                 pygame.draw.rect(self.display, GREEN, pygame.Rect(pt.x, pt.y, BLOCK_SIZE, BLOCK_SIZE))
                 drawHeadfFlag = False
             else:
                 currBlue[-1] -= 1
-                self.snakeBoard[int(pt.y//BLOCK_SIZE)][int(pt.x//BLOCK_SIZE)] = currBlue
+                self.snakeBoard[int(pt.y//BLOCK_SIZE)][int(pt.x//BLOCK_SIZE)] = 256 - i
                 pygame.draw.rect(self.display, tuple(currBlue), pygame.Rect(pt.x, pt.y, BLOCK_SIZE, BLOCK_SIZE))
             
+            i += 1
+            
         pygame.draw.rect(self.display, RED, pygame.Rect(self.food.x, self.food.y, BLOCK_SIZE, BLOCK_SIZE))
-        self.snakeBoard[int(self.food.y//BLOCK_SIZE)][int(self.food.x//BLOCK_SIZE)] = RED
+        self.snakeBoard[int(self.food.y//BLOCK_SIZE)][int(self.food.x//BLOCK_SIZE)] = 1024
         # print(self.snakeBoard.shape, self.snakeBoard)
         text = font.render("Score: " + str(self.score), True, WHITE)
         self.display.blit(text, [0, 0])

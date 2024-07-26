@@ -18,7 +18,7 @@ class Agent:
         self.gamma = 0.9
         self.memory = deque(maxlen=MAX_MEMORY)
         # print(BOARDGRIDS*3)
-        self.model = Linear_QNet(BOARDGRIDS*3 + 11, BOARDGRIDS*3 + 11, 3)
+        self.model = Linear_QNet(BOARDGRIDS + 11, 1024, 3)
         if not training or keep_training:
             self.model.load()
             # for name, param in self.model.named_parameters():
@@ -79,7 +79,10 @@ class Agent:
         # snake_board_tensor = pt.tensor(snake_board, dtype = pt.float32).permute(2, 0, 1).unsqueeze(0)
         # pooled_tensor = F.max_pool2d(snake_board_tensor, kernel_size=2, stride=2)
         # snake_board = pooled_tensor.squeeze(0).permute(1, 2, 0).numpy().flatten()
-        state_array = np.array(state, dtype=int) * 2550
+        if snake_board.max() > 0:
+            snake_board = snake_board / snake_board.max()
+
+        state_array = np.array(state, dtype=int) * 10
 
         # Flatten the snake board and concatenate with the state
         combined_state = np.concatenate((snake_board.flatten(), state_array))
@@ -107,9 +110,9 @@ class Agent:
 
     def get_action(self, state) -> int:
         # random moves: tradeoff exploration / exploitation
-        self.epsilon = 200 - self.n_games
+        self.epsilon = 80 - self.n_games
         final_move = [0, 0, 0]
-        if random.randint(0, 300) < self.epsilon:
+        if random.randint(0, 200) < self.epsilon:
             move = random.randint(0, 2)
             final_move[move] = 1
         else:
@@ -125,7 +128,8 @@ def train(training=True, keep_training=False):
     plot_mean_scores = []
     total_score = 0
     record_score = 0
-    
+    total_reward = 0
+
     agent = Agent(training=training, keep_training=keep_training)
     game = SnakeGameAI()
     while True:
@@ -137,6 +141,7 @@ def train(training=True, keep_training=False):
         
         # perform move and get new state
         reward, done, score = game.play_step(final_move)
+        total_reward += reward
         
         state_new = agent.get_state(game)
         
@@ -166,9 +171,10 @@ def train(training=True, keep_training=False):
                 #     print('---')
             
             mean_score = total_score / agent.n_games
-            print(f'Game {agent.n_games}, Score: {score}, Reward:{reward}, Record: {record_score}, Mean: {mean_score}')
+            print(f'Game {agent.n_games}, Score: {score}, Reward:{total_reward}, Record: {record_score}, Mean: {mean_score}')
+            total_reward = 0
             # plot_scores.append(score)
-            # total_score += score
+            total_score += score
             # plot_mean_scores.append(mean_score)
             # plot(plot_scores, plot_mean_scores)
 
